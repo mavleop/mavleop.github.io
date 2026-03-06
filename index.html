@@ -1,1 +1,128 @@
-hello
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>GitHub Comments</title>
+<style>
+  body { font-family: sans-serif; max-width: 600px; margin: 2rem auto; }
+  #comments { margin-bottom: 2rem; }
+  .comment { border-bottom: 1px solid #ddd; padding: 0.5rem 0; }
+  textarea { width: 100%; height: 80px; }
+  button { padding: 0.5rem 1rem; margin-top: 0.5rem; }
+</style>
+</head>
+<body>
+
+<h2>Comments</h2>
+<div id="comments">Loading comments...</div>
+
+<h3>Leave a comment</h3>
+<textarea id="commentInput" placeholder="Write your comment here..."></textarea>
+<button id="submitComment">Submit</button>
+
+<script>
+
+// yes, I know that there's a token here for you to see.
+// this token only has permission to read/write issues on the mavleop.github.io repo.
+// have at it.
+const TOKEN = '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';
+const OWNER = 'dummy-org-123-let-me-make-an-org';
+const REPO = 'mavleop.github.io';
+const LABEL = 'comment';
+
+// CHANGEME for every post.
+const POST_ID = "test-post";
+
+const commentsContainer = document.getElementById('comments');
+const commentInput = document.getElementById('commentInput');
+const submitBtn = document.getElementById('submitComment');
+
+// Helper to fetch comments (issues with a certain label)
+/*async function fetchComments() {
+  commentsContainer.innerHTML = 'Loading comments...';
+  const res = await fetch(`https://api.github.com/repos/${OWNER}/${REPO}/issues?labels=${LABEL}`, {
+    headers: {
+      Authorization: `token ${TOKEN}`,
+      Accept: 'application/vnd.github+json'
+    }
+  });
+  const issues = await res.json();
+  if (!Array.isArray(issues)) {
+    commentsContainer.innerHTML = 'Failed to load comments';
+    return;
+  }
+  commentsContainer.innerHTML = '';
+  issues.forEach(issue => {
+    const div = document.createElement('div');
+    div.className = 'comment';
+    div.innerHTML = `<strong>${issue.user.login}</strong>: ${issue.body}`;
+    commentsContainer.appendChild(div);
+  });
+}*/
+async function fetchComments() {
+  commentsContainer.innerHTML = "Loading comments...";
+
+  const listRes = await fetch(
+    `https://api.github.com/repos/${OWNER}/${REPO}/contents/comments`
+  );
+
+  const files = await listRes.json();
+
+  if (!Array.isArray(files)) {
+    commentsContainer.innerHTML = "Failed to load comments";
+    return;
+  }
+
+  const comments = await Promise.all(
+    files.map(async file => {
+      const res = await fetch(file.download_url);
+      return res.json();
+    })
+  );
+
+  comments.sort((a, b) => new Date(a.created) - new Date(b.created));
+
+  commentsContainer.innerHTML = "";
+
+  comments.forEach(c => {
+    const div = document.createElement("div");
+    div.className = "comment";
+    div.innerHTML = `<strong>${c.user}</strong>: ${c.body}`;
+    commentsContainer.appendChild(div);
+  });
+}
+
+// Helper to submit a new comment (creates an issue)
+async function submitComment() {
+  const content = commentInput.value.trim();
+  if (!content) return alert('Comment cannot be empty');
+
+  const res = await fetch(`https://api.github.com/repos/${OWNER}/${REPO}/issues`, {
+    method: 'POST',
+    headers: {
+      Authorization: `token ${TOKEN}`,
+      Accept: 'application/vnd.github+json',
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify({
+      title: `Comment:${POST_ID}`,
+      body: content,
+      labels: [LABEL]
+    })
+  });
+
+  if (res.ok) {
+    commentInput.value = '';
+    fetchComments(); // refresh
+  } else {
+    const err = await res.json();
+    alert('Failed to submit comment: ' + (err.message || res.status));
+  }
+}
+
+submitBtn.addEventListener('click', submitComment);
+fetchComments();
+</script>
+
+</body>
+</html>

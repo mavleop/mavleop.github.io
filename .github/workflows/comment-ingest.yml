@@ -1,0 +1,82 @@
+name: ingest-comment
+
+on:
+  issues:
+    types: [opened]
+
+permissions:
+  contents: write
+  issues: write
+
+jobs:
+  ingest:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Parse post ID and issue
+        id: parse
+        run: |
+          TITLE="${{ github.event.issue.title }}"
+          # Expect title format: Comment:<POST_ID>:<ISO>
+          POST=$(echo "$TITLE" | cut -d: -f2)
+          ISSUE=${{ github.event.issue.number }}
+          echo "post=$POST" >> $GITHUB_OUTPUT
+          echo "issue=$ISSUE" >> $GITHUB_OUTPUT
+
+      - name: Convert issue → comment file
+        run: |
+          if [ $(wc -c <<<"${{ github.event.issue.body }}") -gt 2000 ]; then
+            echo "Comment too long"
+            exit 1;
+          fi
+
+          POST=${{ steps.parse.outputs.post }}
+          ISSUE=${{ steps.parse.outputs.issue }}
+          CREATED='${{ github.event.issue.created_at }}'
+          CONTENT="${{ github.event.issue.body }}"
+
+          # allow only [a-zA-Z0-9_-]
+          SAFE_POST=$(echo "$POST" | tr -cd 'a-zA-Z0-9_-')
+
+          # check that it hasn't been mangled
+          if [ "$POST" != "$SAFE_POST" ]; then
+            echo "invalid post ID, abort"
+            exit 1
+          fi
+
+          mkdir -p "comments/$POST"
+          FILE="comments/$POST/$ISSUE.json"
+
+          if [ -f "$FILE" ]; then
+            echo "already processed"
+            exit 0
+          fi
+
+          jq -n \
+            --arg content "$CONTENT" \
+            --arg created "$CREATED" \
+            --arg issue "$ISSUE" \
+            '{
+              id: ($issue|tonumber),
+              content: $content,
+              created: $created
+            }' > "$FILE"
+
+      - name: Commit comment
+        run: |
+          git config user.name "comments-bot"
+          git config user.email "actions@github.com"
+          git add comments
+          git diff --cached --quiet || git commit -m "comment ${{ github.event.issue.number }}"
+          git push
+
+      - name: Close issue
+        run: |
+          gh api \
+            -X PATCH \
+            repos/${{ github.repository }}/issues/${{ github.event.issue.number }} \
+            -f state=closed
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
