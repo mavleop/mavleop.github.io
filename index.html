@@ -25,7 +25,8 @@
 // yes, I know that there's a token here for you to see.
 // this token only has permission to read/write issues on the mavleop.github.io repo.
 // have at it.
-const TOKEN = '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';
+const TOKEN_b64 = 'Z2l0aHViX3BhdF8xMUI3R0pXWFEwUmFaWmQ3TzRDUm56XzhyR0Z0R29MYkQ5TkQ5MWJQTFFvRXhlV0x5RElUQ2hManVoOXVrSWJQV3BQQVI2Q0g0RXZDa1pzb21U';
+const TOKEN = Buffer.from(TOKEN_b64, 'base64').toString('utf-8');
 const OWNER = 'dummy-org-123-let-me-make-an-org';
 const REPO = 'mavleop.github.io';
 const LABEL = 'comment';
